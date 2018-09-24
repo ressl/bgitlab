@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	_ "reflect"
 	//	"sync"
+	"flag"
+	"os/user"
 	"time"
 )
 
@@ -113,8 +115,14 @@ type GitLabProjects []struct {
 
 func main() {
 
-	pages := 50
-	url := fmt.Sprintf("https://git.example.ch/api/v4/projects?per_page=%d", pages)
+	currentUser, _ := user.Current()
+	tokenPtr := flag.String("token", "Yahnax1aeSaiCheireth", "GitLab api Token")
+	urlPtr := flag.String("url", "https://git.example.ch", "GitLab URL")
+	pagesPtr := flag.Int("pages", 50, "Number of items to list per page (max: 100)")
+	cDirPtr := flag.String("cdir", currentUser.HomeDir+"/git", "Define the directory where the projets should be cloned")
+	flag.Parse()
+
+	url := fmt.Sprintf(*urlPtr+"/api/v4/projects?per_page=%d", *pagesPtr)
 
 	var projectName []string
 	var projectNamespace []string
@@ -130,7 +138,7 @@ func main() {
 	}
 
 	req.Header.Set("User-Agent", "bgitlab")
-	req.Header.Set("PRIVATE-TOKEN", "")
+	req.Header.Set("PRIVATE-TOKEN", *tokenPtr)
 
 	res, getErr := gitlabClient.Do(req)
 	if getErr != nil {
@@ -157,14 +165,13 @@ func main() {
 	defer res.Body.Close()
 
 	fmt.Printf("The len of projects: %d\n", len(test))
-	pwd, _ := os.Getwd()
 	cmds := "git"
 
 	numberof, _ := strconv.Atoi(res.Header["X-Total-Pages"][0])
 	fmt.Printf("The total number of pages: %d\n", numberof)
 
 	for i := 2; i <= numberof; i++ {
-		url = fmt.Sprintf("https://git.example.ch/api/v4/projects?per_page=%d&page=%d", pages, i)
+		url = fmt.Sprintf(*urlPtr+"/api/v4/projects?per_page=%d", *pagesPtr, i)
 
 		req, err = http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -197,12 +204,12 @@ func main() {
 	}
 
 	for element := range projectName {
-		if _, err := os.Stat("test/" + projectNamespace[element] + "/.git"); os.IsNotExist(err) {
+		if _, err := os.Stat(*cDirPtr + "/" + projectNamespace[element] + "/.git"); os.IsNotExist(err) {
 			fmt.Printf("Create folder %s\n", projectNamespace[element])
-			os.MkdirAll("test/"+projectNamespace[element], os.ModePerm)
+			os.MkdirAll(*cDirPtr+"/"+projectNamespace[element], os.ModePerm)
 
-			fmt.Printf("Clone project %s into folder %s/%s\n", projectName[element], pwd, projectNamespace[element])
-			args := []string{"clone", projectSSHURL[element], "test/" + projectNamespace[element]}
+			fmt.Printf("Clone project %s into folder %s/%s\n", projectName[element], *cDirPtr, projectNamespace[element])
+			args := []string{"clone", projectSSHURL[element], *cDirPtr + projectNamespace[element]}
 			cmd := exec.Command(cmds, args...)
 			stderr, err := cmd.StderrPipe()
 			if err != nil {
